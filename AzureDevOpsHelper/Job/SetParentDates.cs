@@ -1,7 +1,6 @@
 ﻿using AzureDevOpsHelper.Job.Wiql;
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
-using System.Net.Http;
 using System.Text.Json;
 
 namespace AzureDevOpsHelper.Job;
@@ -11,14 +10,12 @@ internal record PatchOperation(string Op, string path, string value);
 internal class SetParentDates : IJob
 {
     private readonly HttpClient _httpClient;
-    private readonly HttpClient _httpClientWithoutBase;
     private readonly ILogger<SetParentDates> _logger;
 
     public SetParentDates(IHttpClientFactory httpClientFactory,
         ILogger<SetParentDates> logger)
     {
         _httpClient = httpClientFactory.CreateClient("AzureDevOps");
-        _httpClientWithoutBase = httpClientFactory.CreateClient("AzureDevOpsWithoutBaseUrl");
         _logger = logger;
     }
     public async Task Run(string project, CancellationToken cancellationToken)
@@ -39,7 +36,7 @@ internal class SetParentDates : IJob
         foreach (var workItem in workItemResponse.WorkItemNavigations)
         {
             WorkItemDetails? details = await GetProductBacklogItemDetails(workItem.Id, cancellationToken);
-            if(details is not null)
+            if (details is not null)
             {
                 UpdateDictionaries(startDates, targetDates, details);
             }
@@ -61,16 +58,16 @@ internal class SetParentDates : IJob
         List<PatchOperation> patchOperations = [];
         if (startDates.TryGetValue(workItemId, out DateTime startDate))
         {
-            PatchOperation patchOperation = new("add", "Microsoft.VSTS.Scheduling.StartDate", startDate.ToString());
+            PatchOperation patchOperation = new("add", "/fields/Microsoft.VSTS.Scheduling.StartDate", startDate.ToString());
             patchOperations.Add(patchOperation);
         }
         if (targetDates.TryGetValue(workItemId, out DateTime targetDate))
         {
-            PatchOperation patchOperation = new("add", "Microsoft.VSTS.Scheduling.TargetDate", startDate.ToString());
+            PatchOperation patchOperation = new("add", "/fields/Microsoft.VSTS.Scheduling.TargetDate", targetDate.ToString());
             patchOperations.Add(patchOperation);
         }
         string url = $"_apis/wit/workitems/{workItemId}?api-version=7.1";
-        var content = new StringContent(JsonSerializer.Serialize(patchOperations), System.Text.Encoding.UTF8, "application/json");
+        var content = new StringContent(JsonSerializer.Serialize(patchOperations), System.Text.Encoding.UTF8, "application/json-patch+json");
         var response = await _httpClient.PatchAsync(url, content, cancellationToken);
         if (!response.IsSuccessStatusCode)
         {
@@ -108,36 +105,45 @@ internal class SetParentDates : IJob
             return null;
         }
         string json = await response.Content.ReadAsStringAsync();
-        dynamic data = JsonSerializer.Deserialize<dynamic>(json) 
-            ?? throw new InvalidDataException($"Cannot deserialize {json}");
+        using var document = JsonDocument.Parse(json);
+        JsonElement root = document.RootElement;
+        if (!root.TryGetProperty("fields", out JsonElement fieldsElement))
+        {
+            _logger.LogError("Cannot find fields property in json string {json}", json);
+            return null;
+        }
+
         DateTime? startDate = null;
-        if (DateTime.TryParse((string)data.fields["Microsoft.VSTS.Scheduling.StartDate"], out DateTime parsedDate))
+        if (fieldsElement.TryGetProperty("Microsoft.VSTS.Scheduling.StartDate", out JsonElement startDateElement) &&
+            DateTime.TryParse(startDateElement.GetString(), out DateTime parsedDate))
         {
             startDate = parsedDate;
         }
         else
         {
-            _logger.LogWarning("PBI {Id} has no valid start date: {json}", id, (string)data.fields["Microsoft.VSTS.Scheduling.StartDate"]);
+            _logger.LogWarning("PBI {Id} has no valid start date: {json}", id, json);
         }
 
         DateTime? targetDate = null;
-        if (DateTime.TryParse((string)data.fields["Microsoft.VSTS.Scheduling.StartDate"], out parsedDate))
+        if (fieldsElement.TryGetProperty("Microsoft.VSTS.Scheduling.TargetDate", out JsonElement targetDateElement) &&
+            DateTime.TryParse(targetDateElement.GetString(), out parsedDate))
         {
             targetDate = parsedDate;
         }
         else
         {
-            _logger.LogWarning("PBI {Id} has no valid target date: {json}", id, (string)data.fields["Microsoft.VSTS.Scheduling.StartDate"]);
+            _logger.LogWarning("PBI {Id} has no valid target date: {json}", id, json);
         }
 
         int? parentId = null;
-        if (int.TryParse((string)data.fields["System.Parent"], out int parsedParentId))
+        if (fieldsElement.TryGetProperty("System.Parent", out JsonElement parentElement) &&
+            parentElement.TryGetInt32(out int parsedParentId))
         {
             parentId = parsedParentId;
         }
         else
         {
-            _logger.LogWarning("PBI {Id} has no valid parent: {json}", id, (string)data.fields["System.Parent"]);
+            _logger.LogWarning("PBI {Id} has no valid parent id: {json}", id, json);
         }
 
         return new WorkItemDetails(startDate, targetDate, parentId);
@@ -146,6 +152,5 @@ internal class SetParentDates : IJob
     public void Dispose()
     {
         _httpClient.Dispose();
-        _httpClientWithoutBase.Dispose();
     }
 }

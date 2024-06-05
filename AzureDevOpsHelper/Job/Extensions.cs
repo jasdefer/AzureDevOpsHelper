@@ -17,6 +17,7 @@ internal static class Extensions
         {
             var errorContent = await response.Content.ReadAsStringAsync();
             logger.LogError("Query to {BaseAddress}{Url} return the status code {StatusCode}. {ErrorContent}", httpClient.BaseAddress, url, response.StatusCode, errorContent);
+            throw new Exception(errorContent);
         }
         string responseContent = await response.Content.ReadAsStringAsync();
         return responseContent;

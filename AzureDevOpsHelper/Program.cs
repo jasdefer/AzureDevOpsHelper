@@ -21,13 +21,6 @@ builder.Services.AddHttpClient("AzureDevOps", (serviceProvider, httpClient) =>
     httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", authToken);
 });
 
-builder.Services.AddHttpClient("AzureDevOpsWithoutBaseUrl", (serviceProvider, httpClient) =>
-{
-    var settings = serviceProvider.GetRequiredService<IOptions<AzureDevOpsSettings>>().Value;
-    httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-    var authToken = Convert.ToBase64String(System.Text.Encoding.ASCII.GetBytes($":{settings.AccessToken}"));
-    httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", authToken);
-});
 builder.Services.AddHostedService<Worker>();
 
 IHost host = builder.Build();
