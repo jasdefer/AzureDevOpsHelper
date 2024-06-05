@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "AzureDevOpsHelper": {
+      "commandName": "Project",
+      "environmentVariables": {
+        "DOTNET_ENVIRONMENT": "Development"
+      }
+    }
+  }
+}
