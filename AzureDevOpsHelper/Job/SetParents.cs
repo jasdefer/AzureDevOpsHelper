@@ -1,4 +1,5 @@
-﻿using AzureDevOpsHelper.Job.Wiql;
+﻿using AzureDevOpsHelper.Job.Helper;
+using AzureDevOpsHelper.Job.Wiql;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Text.Json;
@@ -12,14 +13,12 @@ public class Relation
 }
 public class RelationSettings
 {
-    public List<Relation> Relations { get; set; }
+    public List<Relation> Relations { get; set; } = [];
 }
-public record PatchValue(string Rel, string Url);
-public record Patch(string Op, string Path, PatchValue Value);
 
 internal class SetParents : IJob
 {
-    private const string _rel = "System.LinkTypes.Hierarchy-Reverse";
+    
     private readonly HttpClient _httpClient;
     private readonly ILogger<SetParents> _logger;
     private readonly List<Relation> _relations;
@@ -58,16 +57,7 @@ internal class SetParents : IJob
             {
                 continue;
             }
-            PatchValue patchValue = new(_rel, parentUrl);
-            Patch[] patches = [new("add", "/relations/-", patchValue)];
-            string url = $"_apis/wit/workitems/{relation.ChildId}?api-version=7.1";
-            var content = new StringContent(JsonSerializer.Serialize(patches), System.Text.Encoding.UTF8, "application/json-patch+json");
-            var response = await _httpClient.PatchAsync(url, content, cancellationToken);
-            if (!response.IsSuccessStatusCode)
-            {
-                string errorContent = await response.Content.ReadAsStringAsync();
-                _logger.LogError("Cannot patch the work item id {id} with status code {StatusCode}: {content}", relation.ChildId, response.StatusCode, errorContent);
-            }
+            await _httpClient.SetParent(_logger, parentUrl, relation.ChildId, cancellationToken);
         }
     }
 }

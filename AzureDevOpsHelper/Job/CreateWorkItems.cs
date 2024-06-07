@@ -1,4 +1,6 @@
-﻿using AzureDevOpsHelper.Job.Wiql;
+﻿using AzureDevOpsHelper.Job.Helper;
+using AzureDevOpsHelper.Job.Model;
+using AzureDevOpsHelper.Job.Wiql;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Text.Json;
@@ -13,6 +15,7 @@ public class WorkItemSettings
 public class WorkItem
 {
     public required string Title { get; set; }
+    public required string Type { get; set; }
     public DateTime? StartDate { get; set; }
     public DateTime? TargetDate { get; set; }
     public int? ParentId { get; set; }
@@ -45,7 +48,39 @@ internal class CreateWorkItems : IJob
         Dictionary<int, string> workItemUrlsById = workItemResponse.WorkItemNavigations.ToDictionary(x => x.Id, x => x.Url);
         foreach (var workItem in _workItems)
         {
-
+            string url = $"_apis/wit/workitems/${workItem.Type}?api-version=7.1";
+            List<WorkItemOperation> operations =
+                [
+                    new WorkItemOperation("add","/fields/System.Title",workItem.Title),
+                ];
+            if (workItem.StartDate.HasValue)
+            {
+                operations.Add(new WorkItemOperation("add", "/fields/Microsoft.VSTS.Scheduling.StartDate", workItem.StartDate.Value.ToString()));
+            }
+            if (workItem.TargetDate.HasValue)
+            {
+                operations.Add(new WorkItemOperation("add", "/fields/Microsoft.VSTS.Scheduling.TargetDate", workItem.TargetDate.Value.ToString()));
+            }
+            var content = new StringContent(JsonSerializer.Serialize(operations), System.Text.Encoding.UTF8, "application/json-patch+json");
+            var response = await _httpClient.PatchAsync(url, content, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                string errorContent = await response.Content.ReadAsStringAsync();
+                _logger.LogError("Cannot create the work item with status code {StatusCode}: {content}", response.StatusCode, errorContent);
+            }
+            if (workItem.ParentId.HasValue)
+            {
+                if(!workItemUrlsById.TryGetValue(workItem.ParentId.Value, out string? parentUrl))
+                {
+                    _logger.LogWarning("The parent {ParentId} does not exist for the child {ChildTitle}", workItem.ParentId.Value, workItem.Title);
+                    continue;
+                }
+                string createdWorkIktemJson = await response.Content.ReadAsStringAsync();
+                using JsonDocument document = JsonDocument.Parse(createdWorkIktemJson);
+                JsonElement root = document.RootElement;
+                int workItemId = root.GetProperty("id").GetInt32();
+                await _httpClient.SetParent(_logger, parentUrl, workItemId, cancellationToken);
+            }
         }
         throw new NotImplementedException();
     }

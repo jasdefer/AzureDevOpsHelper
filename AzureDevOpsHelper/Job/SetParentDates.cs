@@ -1,11 +1,12 @@
-﻿using AzureDevOpsHelper.Job.Wiql;
+﻿using AzureDevOpsHelper.Job.Helper;
+using AzureDevOpsHelper.Job.Model;
+using AzureDevOpsHelper.Job.Wiql;
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
 using System.Text.Json;
 
 namespace AzureDevOpsHelper.Job;
 internal record WorkItemDetails(DateTime? StartDate, DateTime? TargetDate, int? ParentId);
-internal record PatchOperation(string Op, string path, string value);
 
 internal class SetParentDates : IJob
 {
@@ -55,15 +56,15 @@ internal class SetParentDates : IJob
 
     private async Task UpdateParents(ConcurrentDictionary<int, DateTime> startDates, ConcurrentDictionary<int, DateTime> targetDates, int workItemId, CancellationToken cancellationToken)
     {
-        List<PatchOperation> patchOperations = [];
+        List<WorkItemOperation> patchOperations = [];
         if (startDates.TryGetValue(workItemId, out DateTime startDate))
         {
-            PatchOperation patchOperation = new("add", "/fields/Microsoft.VSTS.Scheduling.StartDate", startDate.ToString());
+            WorkItemOperation patchOperation = new("add", "/fields/Microsoft.VSTS.Scheduling.StartDate", startDate.ToString());
             patchOperations.Add(patchOperation);
         }
         if (targetDates.TryGetValue(workItemId, out DateTime targetDate))
         {
-            PatchOperation patchOperation = new("add", "/fields/Microsoft.VSTS.Scheduling.TargetDate", targetDate.ToString());
+            WorkItemOperation patchOperation = new("add", "/fields/Microsoft.VSTS.Scheduling.TargetDate", targetDate.ToString());
             patchOperations.Add(patchOperation);
         }
         string url = $"_apis/wit/workitems/{workItemId}?api-version=7.1";
