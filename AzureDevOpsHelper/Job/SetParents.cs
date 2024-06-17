@@ -18,7 +18,7 @@ public class RelationSettings
 
 internal class SetParents : IJob
 {
-    
+
     private readonly HttpClient _httpClient;
     private readonly ILogger<SetParents> _logger;
     private readonly List<Relation> _relations;
