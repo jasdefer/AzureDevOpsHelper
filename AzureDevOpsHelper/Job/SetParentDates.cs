@@ -122,7 +122,7 @@ internal class SetParentDates : IJob
         }
         else
         {
-            _logger.LogWarning("PBI {Id} has no valid start date: {json}", id, json);
+            return null;
         }
 
         DateTime? targetDate = null;
@@ -133,7 +133,7 @@ internal class SetParentDates : IJob
         }
         else
         {
-            _logger.LogWarning("PBI {Id} has no valid target date: {json}", id, json);
+            return null;
         }
 
         int? parentId = null;
