@@ -26,6 +26,7 @@ internal class SetParentDates : IJob
 
     public async Task Run(string project, string workItemType, CancellationToken cancellationToken)
     {
+        _logger.LogInformation("Setting parent dates");
         string query = $"Select [System.Id], [System.WorkItemType], [Start Date], [Target Date], [System.Parent] From WorkItems Where [System.TeamProject] = '{project}' AND [System.WorkItemType] = '{workItemType}'";
         string json = await _httpClient.Query(query, cancellationToken, _logger);
         WorkItemResponse workItemResponse = JsonSerializer.Deserialize<WorkItemResponse>(json)

@@ -12,7 +12,7 @@ public class Relation
 }
 public class RelationSettings
 {
-    public List<Relation> Relations { get; set; }
+    public List<Relation> Relations { get; set; } = [];
 }
 public record PatchValue(string Rel, string Url);
 public record Patch(string Op, string Path, PatchValue Value);
@@ -39,6 +39,7 @@ internal class SetParents : IJob
 
     public async Task Run(string project, CancellationToken cancellationToken)
     {
+        _logger.LogInformation("Setting parents");
         string query = $"Select [System.Id] From WorkItems Where [System.TeamProject] = '{project}'";
         string json = await _httpClient.Query(query, cancellationToken, _logger);
         WorkItemResponse workItemResponse = JsonSerializer.Deserialize<WorkItemResponse>(json)

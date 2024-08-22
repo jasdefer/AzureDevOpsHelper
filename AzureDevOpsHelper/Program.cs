@@ -8,8 +8,9 @@ using System.Net.Http.Headers;
 HostApplicationBuilder builder = Host.CreateApplicationBuilder(args);
 builder.Services.Configure<AzureDevOpsSettings>(builder.Configuration.GetSection("AzureDevOps"));
 builder.Services.Configure<RelationSettings>(builder.Configuration.GetSection("RelationSettings"));
-builder.Services.AddTransient<IJob, SetParents>();
+//builder.Services.AddTransient<IJob, SetParents>();
 //builder.Services.AddTransient<IJob, SetParentDates>();
+builder.Services.AddTransient<IJob, AddTags>();
 builder.Services.AddHttpClient("AzureDevOps", (serviceProvider, httpClient) =>
 {
     var settings = serviceProvider.GetRequiredService<IOptions<AzureDevOpsSettings>>().Value;
